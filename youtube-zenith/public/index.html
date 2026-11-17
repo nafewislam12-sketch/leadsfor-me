@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zenith • YouTube ICP Scraper & Lead Machine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .glow { box-shadow: 0 0 35px -5px rgba(239, 68, 68, 0.25); }
+    .glass { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+  </style>
+</head>
+<body class="bg-[#07090e] text-slate-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-white/5 bg-[#0b0f17]/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center shadow-lg shadow-red-500/20">
+          <i class="fa-brands fa-youtube text-white text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">ZENITH SCRAPER</h1>
+            <span class="px-2 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-400 rounded-full border border-red-500/30">MULTI-IP READY</span>
+          </div>
+          <p class="text-xs text-slate-400">Distributed YouTube ICP & Lead Extraction Engine</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/api/download/csv" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 border border-white/10 transition">
+          <i class="fa-solid fa-file-csv text-emerald-400"></i> Export CSV
+        </a>
+        <a href="/api/download/xlsx" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold flex items-center gap-2 border border-emerald-500/30 transition">
+          <i class="fa-solid fa-file-excel text-emerald-400"></i> Export Excel
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 space-y-6">
+
+    <!-- KPI Metric Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="glass p-5 rounded-2xl relative overflow-hidden">
+        <div class="text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Total Leads</div>
+        <div id="stat-total" class="text-3xl font-extrabold text-white">0</div>
+        <i class="fa-solid fa-users absolute right-4 bottom-4 text-slate-800 text-4xl"></i>
+      </div>
+      <div class="glass p-5 rounded-2xl relative overflow-hidden border-emerald-500/20">
+        <div class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-1">With Verified Email</div>
+        <div id="stat-emails" class="text-3xl font-extrabold text-emerald-400">0</div>
+        <i class="fa-solid fa-envelope absolute right-4 bottom-4 text-emerald-950/40 text-4xl"></i>
+      </div>
+      <div class="glass p-5 rounded-2xl relative overflow-hidden border-sky-500/20">
+        <div class="text-xs uppercase tracking-wider text-sky-400 font-semibold mb-1">With Custom Website</div>
+        <div id="stat-websites" class="text-3xl font-extrabold text-sky-400">0</div>
+        <i class="fa-solid fa-globe absolute right-4 bottom-4 text-sky-950/40 text-4xl"></i>
+      </div>
+      <div class="glass p-5 rounded-2xl relative overflow-hidden border-amber-500/20">
+        <div class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-1">With Skool Community</div>
+        <div id="stat-skool" class="text-3xl font-extrabold text-amber-400">0</div>
+        <i class="fa-solid fa-graduation-cap absolute right-4 bottom-4 text-amber-950/40 text-4xl"></i>
+      </div>
+    </div>
+
+    <!-- Main Grid: Controls + Live Feed -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left Column: Controls (5 cols) -->
+      <div class="lg:col-span-5 space-y-5">
+        
+        <div class="glass p-6 rounded-2xl space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-white/5">
+            <h2 class="font-bold text-sm tracking-wide uppercase text-slate-300 flex items-center gap-2">
+              <i class="fa-solid fa-sliders text-red-500"></i> ICP & Search Config
+            </h2>
+            <span class="text-xs text-slate-500 mono">v1.0.0</span>
+          </div>
+
+          <!-- Niches -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+              <span>Target Niches / ICP Search Queries</span>
+              <span class="text-[10px] text-slate-500">Comma-separated</span>
+            </label>
+            <textarea id="input-niches" rows="3" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500/60 mono transition" placeholder="e.g. b2b saas founder, real estate coach, ai automation consultant, fitness coach">b2b saas founder, real estate coach, ai automation agency</textarea>
+          </div>
+
+          <!-- Workers & Leads -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Workers</label>
+              <select id="input-workers" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500/60">
+                <option value="1">1 Worker</option>
+                <option value="2" selected>2 Workers</option>
+                <option value="4">4 Workers</option>
+                <option value="8">8 Workers</option>
+                <option value="12">12 Workers</option>
+                <option value="20">20 Workers (GitHub Actions)</option>
+              </select>
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Target Leads Limit</label>
+              <input id="input-limit" type="number" value="30" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500/60 mono">
+            </div>
+          </div>
+
+          <!-- Delay & Videos Scan -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Request Delay (ms)</label>
+              <select id="input-delay" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500/60">
+                <option value="200">200ms (Fastest)</option>
+                <option value="500" selected>500ms (Balanced)</option>
+                <option value="1000">1000ms (Safe)</option>
+                <option value="2000">2000ms (Ultra Safe)</option>
+              </select>
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-300">Recent Videos to Scan</label>
+              <select id="input-videos" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500/60">
+                <option value="1">1 Video</option>
+                <option value="3" selected>3 Videos</option>
+                <option value="5">5 Videos</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Subscribers & Views Filter -->
+          <div class="grid grid-cols-2 gap-3 pt-1 border-t border-white/5">
+            <div class="space-y-1">
+              <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+                <span>Min Subscribers</span>
+                <span class="text-[9px] text-slate-500">e.g. 1000</span>
+              </label>
+              <input id="input-min-subs" type="number" placeholder="0 (Any)" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500/60 mono">
+            </div>
+            <div class="space-y-1">
+              <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+                <span>Max Subscribers</span>
+                <span class="text-[9px] text-slate-500">e.g. 500k</span>
+              </label>
+              <input id="input-max-subs" type="number" placeholder="No limit" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500/60 mono">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1">
+              <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+                <span>Min Channel Views</span>
+                <span class="text-[9px] text-slate-500">e.g. 10000</span>
+              </label>
+              <input id="input-min-views" type="number" placeholder="0 (Any)" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500/60 mono">
+            </div>
+            <div class="space-y-1">
+              <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+                <span>Max Channel Views</span>
+                <span class="text-[9px] text-slate-500">e.g. 50M</span>
+              </label>
+              <input id="input-max-views" type="number" placeholder="No limit" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500/60 mono">
+            </div>
+          </div>
+
+          <!-- Upload Recency Filter -->
+          <div class="space-y-1 pt-1 border-t border-white/5">
+            <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-clock-rotate-left text-rose-400"></i> Latest Video Upload Recency</span>
+              <span class="text-[9px] text-slate-500">Activity Filter</span>
+            </label>
+            <select id="input-max-upload-days" class="w-full bg-[#0a0e17] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500/60">
+              <option value="0" selected>Any Time (All Channels)</option>
+              <option value="7">Active within Last 7 Days (🔥 Ultra Fresh)</option>
+              <option value="14">Active within Last 14 Days (2 Weeks)</option>
+              <option value="30">Active within Last 30 Days (1 Month)</option>
+              <option value="60">Active within Last 60 Days (2 Months)</option>
+              <option value="90">Active within Last 90 Days (3 Months)</option>
+              <option value="180">Active within Last 180 Days (6 Months)</option>
+              <option value="365">Active within Last 365 Days (1 Year)</option>
+            </select>
+          </div>
+
+          <!-- Filter Toggles -->
+          <div class="space-y-2 pt-2 border-t border-white/5">
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Filters & Enrichment</div>
+
+            <!-- Country Filters -->
+            <label class="flex items-center justify-between p-2 rounded-lg bg-red-500/[0.05] border border-red-500/20 hover:bg-red-500/[0.08] cursor-pointer">
+              <div class="text-xs">
+                <div class="font-bold text-red-400 flex items-center gap-1.5">
+                  <i class="fa-solid fa-ban text-[11px]"></i> Strictly Exclude 3rd World Countries
+                </div>
+                <div class="text-[10px] text-slate-400">Strictly blocks India, Pakistan, Bangladesh, Nigeria, Philippines, etc.</div>
+              </div>
+              <input id="filter-exclude-third-world" type="checkbox" checked class="w-4 h-4 rounded accent-red-500">
+            </label>
+
+            <label class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] cursor-pointer">
+              <div class="text-xs">
+                <div class="font-semibold text-white flex items-center gap-1.5">
+                  <i class="fa-solid fa-flag-usa text-amber-400 text-[11px]"></i> Strict Tier-1 Countries Only
+                </div>
+                <div class="text-[10px] text-slate-400">Keep ONLY USA, UK, Canada, Australia, NZ, and Tier-1 Europe</div>
+              </div>
+              <input id="filter-tier1-only" type="checkbox" class="w-4 h-4 rounded accent-amber-500">
+            </label>
+            
+            <label class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] cursor-pointer">
+              <div class="text-xs">
+                <div class="font-semibold text-white">Require Valid Email</div>
+                <div class="text-[10px] text-slate-400">Only save leads where email was successfully extracted</div>
+              </div>
+              <input id="filter-require-email" type="checkbox" class="w-4 h-4 rounded accent-red-500">
+            </label>
+
+            <label class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] cursor-pointer">
+              <div class="text-xs">
+                <div class="font-semibold text-white">Require Custom Website / Domain</div>
+                <div class="text-[10px] text-slate-400">Keep only creators who own a business domain</div>
+              </div>
+              <input id="filter-require-domain" type="checkbox" class="w-4 h-4 rounded accent-sky-500">
+            </label>
+
+            <label class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] cursor-pointer">
+              <div class="text-xs">
+                <div class="font-semibold text-white">Require Skool Community</div>
+                <div class="text-[10px] text-slate-400">Keep only creators running a community on Skool.com</div>
+              </div>
+              <input id="filter-require-skool" type="checkbox" class="w-4 h-4 rounded accent-amber-500">
+            </label>
+
+            <label class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] cursor-pointer">
+              <div class="text-xs">
+                <div class="font-semibold text-white">Deep Scan Website & /Contact</div>
+                <div class="text-[10px] text-slate-400">Crawl creator's site homepage & /contact for emails</div>
+              </div>
+              <input id="opt-deep-website" type="checkbox" checked class="w-4 h-4 rounded accent-emerald-500">
+            </label>
+          </div>
+
+          <!-- Buttons -->
+          <div class="pt-3 space-y-2">
+            <button id="btn-start" onclick="startScrape()" class="w-full py-3 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 transition">
+              <i class="fa-solid fa-play"></i> Run Local Scraper Test
+            </button>
+            <button onclick="showGitHubModal()" class="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-2 border border-white/10 transition">
+              <i class="fa-brands fa-github text-white"></i> Deploy on GitHub Actions (Multiple IPs)
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Right Column: Live Progress & Leads Table (7 cols) -->
+      <div class="lg:col-span-7 space-y-5">
+        
+        <!-- Live Status Banner -->
+        <div id="status-card" class="glass p-4 rounded-2xl flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div id="status-spinner" class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+            <div>
+              <div id="status-title" class="text-xs font-bold text-white">Engine Ready</div>
+              <div id="status-desc" class="text-[11px] text-slate-400">Waiting for trigger or GitHub Actions run.</div>
+            </div>
+          </div>
+          <div id="progress-badge" class="px-3 py-1 rounded-full bg-slate-800 text-[11px] mono text-slate-300 border border-white/10">0 / 0</div>
+        </div>
+
+        <!-- Leads Table -->
+        <div class="glass rounded-2xl overflow-hidden">
+          <div class="p-4 border-b border-white/5 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-sm text-slate-200">Extracted Leads Stream</h3>
+              <span id="table-count" class="px-2 py-0.5 rounded bg-slate-800 text-[10px] mono text-slate-400">0</span>
+            </div>
+            <input id="table-search" oninput="filterTable()" type="text" placeholder="Filter by name, email, niche..." class="bg-[#0a0e17] border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-red-500/50 w-52">
+          </div>
+
+          <div class="overflow-x-auto max-h-[580px] overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-black/30 sticky top-0 text-slate-400 font-semibold uppercase text-[10px] tracking-wider border-b border-white/5">
+                <tr>
+                  <th class="py-3 px-3">Channel / Creator</th>
+                  <th class="py-3 px-3">Email & Contact</th>
+                  <th class="py-3 px-3">Links & Communities</th>
+                  <th class="py-3 px-3">Subscribers</th>
+                </tr>
+              </thead>
+              <tbody id="leads-tbody" class="divide-y divide-white/5">
+                <tr>
+                  <td colspan="4" class="py-12 text-center text-slate-500">
+                    <i class="fa-solid fa-satellite-dish text-3xl mb-2 text-slate-700"></i>
+                    <div>No leads scraped in this session yet.</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- GitHub Modal -->
+  <div id="github-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-[#0e131f] border border-white/15 rounded-2xl max-w-2xl w-full p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div class="flex items-center gap-2 font-bold text-base text-white">
+          <i class="fa-brands fa-github text-xl"></i> Run on GitHub Actions (Multiple IPs)
+        </div>
+        <button onclick="closeGitHubModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+        <p>GitHub Actions provides <strong class="text-white">fresh, rotating datacenter IPs</strong> on each runner, allowing you to bypass YouTube rate limits completely!</p>
+        
+        <div class="p-3 rounded-xl bg-slate-900 border border-white/10 space-y-2">
+          <div class="font-bold text-amber-400">Step 1: Push workflow to your repo</div>
+          <div class="mono text-[11px] bg-black/50 p-2 rounded text-slate-300 select-all">
+            git add . && git commit -m "Add Zenith Scraper" && git push
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-white/10 space-y-2">
+          <div class="font-bold text-emerald-400">Step 2: Trigger via GitHub Web UI or CLI</div>
+          <p>Go to your GitHub repo &gt; <strong>Actions</strong> &gt; <strong>Zenith YouTube Lead Scraper</strong> &gt; <strong>Run workflow</strong>.</p>
+          <div class="mono text-[11px] bg-black/50 p-2 rounded text-slate-300 select-all">
+            gh workflow run zenith_scraper.yml -f niches="b2b saas, real estate coach" -f workers="5" -f max_channels_per_worker="50"
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-white/10 space-y-1">
+          <div class="font-bold text-sky-400">Step 3: Download Aggregated Leads</div>
+          <p>When completed, download the consolidated <code class="text-emerald-300">zenith_leads_master.xlsx</code> and <code class="text-emerald-300">zenith_leads_master.csv</code> artifact directly from the run summary!</p>
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button onclick="closeGitHubModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg text-white">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let leadsData = [];
+    const ws = new WebSocket(`ws://${location.host}`);
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'JOB_STARTED') {
+          updateStatus('Scraping in progress...', `Job #${msg.jobId} active with ${msg.numWorkers} workers`, true);
+        } else if (msg.type === 'WORKER_PROGRESS') {
+          if (msg.latestLead) {
+            leadsData.unshift(msg.latestLead);
+            renderTable();
+            updateKPIs();
+          }
+          document.getElementById('progress-badge').innerText = `${msg.current} / ${msg.total}`;
+        } else if (msg.type === 'JOB_COMPLETED') {
+          updateStatus('Scrape Completed!', `Aggregated ${msg.stats.totalLeads} unique leads (${msg.stats.withEmails} emails)`, false);
+        } else if (msg.type === 'JOB_ERROR') {
+          updateStatus('Job Error', msg.error, false, true);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    function updateStatus(title, desc, isWorking, isError) {
+      document.getElementById('status-title').innerText = title;
+      document.getElementById('status-desc').innerText = desc;
+      const spinner = document.getElementById('status-spinner');
+      if (isWorking) {
+        spinner.className = 'w-3 h-3 rounded-full bg-amber-500 animate-ping';
+      } else if (isError) {
+        spinner.className = 'w-3 h-3 rounded-full bg-red-500';
+      } else {
+        spinner.className = 'w-3 h-3 rounded-full bg-emerald-500';
+      }
+    }
+
+    async function startScrape() {
+      const payload = {
+        niches: document.getElementById('input-niches').value,
+        workers: document.getElementById('input-workers').value,
+        limit: document.getElementById('input-limit').value,
+        delay: document.getElementById('input-delay').value,
+        videoCount: document.getElementById('input-videos').value,
+        minSubs: document.getElementById('input-min-subs').value,
+        maxSubs: document.getElementById('input-max-subs').value,
+        minViews: document.getElementById('input-min-views').value,
+        maxViews: document.getElementById('input-max-views').value,
+        maxUploadDays: document.getElementById('input-max-upload-days').value,
+        excludeThirdWorld: document.getElementById('filter-exclude-third-world').checked,
+        tier1Only: document.getElementById('filter-tier1-only').checked,
+        requireEmail: document.getElementById('filter-require-email').checked,
+        requireDomain: document.getElementById('filter-require-domain').checked,
+        requireSkool: document.getElementById('filter-require-skool').checked,
+        deepWebsite: document.getElementById('opt-deep-website').checked
+      };
+
+      const btn = document.getElementById('btn-start');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Initializing Workers...`;
+
+      try {
+        const res = await fetch('/api/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        console.log('Started:', data);
+      } catch (err) {
+        alert('Failed to start scrape: ' + err.message);
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = `<i class="fa-solid fa-play"></i> Run Local Scraper Test`;
+        }, 1500);
+      }
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('leads-tbody');
+      const search = (document.getElementById('table-search').value || '').toLowerCase();
+      
+      const filtered = leadsData.filter(l => {
+        if (!search) return true;
+        return (l.title || '').toLowerCase().includes(search) ||
+               (l.primaryEmail || '').toLowerCase().includes(search) ||
+               (l.bio || '').toLowerCase().includes(search) ||
+               (l.targetNiche || '').toLowerCase().includes(search);
+      });
+
+      document.getElementById('table-count').innerText = filtered.length;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-500">No matching leads found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(l => `
+        <tr class="hover:bg-white/[0.02] transition">
+          <td class="py-3 px-3">
+            <div class="font-bold text-white flex items-center gap-1.5">
+              <a href="${l.channelUrl}" target="_blank" class="hover:text-red-400 hover:underline">${escapeHtml(l.title)}</a>
+            </div>
+            <div class="text-[11px] text-slate-400 mono">${escapeHtml(l.handle || '')}</div>
+            <div class="text-[10px] text-slate-500 line-clamp-1 mt-0.5">${escapeHtml(l.bio || '')}</div>
+          </td>
+          <td class="py-3 px-3">
+            ${l.hasEmail ? `
+              <div class="flex items-center gap-1.5 text-emerald-400 font-semibold mono">
+                <i class="fa-solid fa-envelope text-[10px]"></i> ${escapeHtml(l.primaryEmail)}
+              </div>
+              <div class="text-[9px] text-slate-500">${escapeHtml(l.emailSource || '')}</div>
+            ` : `<span class="text-slate-500 italic text-[11px]">No email found</span>`}
+          </td>
+          <td class="py-3 px-3 space-y-1">
+            ${l.websiteUrl ? `
+              <a href="${l.websiteUrl}" target="_blank" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[10px] hover:bg-sky-500/20">
+                <i class="fa-solid fa-globe"></i> Website
+              </a>
+            ` : ''}
+            ${l.skoolLink ? `
+              <a href="${l.skoolLink}" target="_blank" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] hover:bg-amber-500/20">
+                <i class="fa-solid fa-graduation-cap"></i> Skool
+              </a>
+            ` : ''}
+            ${l.instagram ? `<a href="${l.instagram}" target="_blank" class="text-slate-400 hover:text-white text-xs"><i class="fa-brands fa-instagram"></i></a>` : ''}
+            ${l.twitter ? `<a href="${l.twitter}" target="_blank" class="text-slate-400 hover:text-white text-xs"><i class="fa-brands fa-x-twitter"></i></a>` : ''}
+            ${l.linkedin ? `<a href="${l.linkedin}" target="_blank" class="text-slate-400 hover:text-white text-xs"><i class="fa-brands fa-linkedin"></i></a>` : ''}
+          </td>
+          <td class="py-3 px-3 mono text-slate-300">
+            <div class="font-bold text-white">${escapeHtml(l.subscribers || 'N/A')}</div>
+            <div class="text-[10px] text-slate-400">${escapeHtml(l.views || '')}</div>
+            <div class="text-[10px] text-emerald-400 font-sans mt-0.5">${escapeHtml(l.country ? '📍 ' + l.country : '📍 Global')}</div>
+            ${l.lastUploadText ? `<div class="text-[9px] text-rose-300 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 inline-block mt-0.5"><i class="fa-solid fa-clock text-[8px]"></i> ${escapeHtml(l.lastUploadText)}</div>` : ''}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function updateKPIs() {
+      document.getElementById('stat-total').innerText = leadsData.length;
+      document.getElementById('stat-emails').innerText = leadsData.filter(l => l.hasEmail).length;
+      document.getElementById('stat-websites').innerText = leadsData.filter(l => l.hasCustomDomain).length;
+      document.getElementById('stat-skool').innerText = leadsData.filter(l => l.hasSkool).length;
+    }
+
+    function filterTable() {
+      renderTable();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showGitHubModal() {
+      document.getElementById('github-modal').classList.remove('hidden');
+    }
+
+    function closeGitHubModal() {
+      document.getElementById('github-modal').classList.add('hidden');
+    }
+
+    // Load initial leads if available
+    fetch('/api/leads/latest').then(r => r.json()).then(res => {
+      if (res.success && res.leads && res.leads.length > 0) {
+        leadsData = res.leads;
+        renderTable();
+        updateKPIs();
+      }
+    }).catch(() => {});
+  </script>
+</body>
+</html>
+

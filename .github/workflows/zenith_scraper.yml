@@ -1,0 +1,244 @@
+name: Zenith YouTube Lead Scraper (Multi-IP Distributed)
+
+on:
+  workflow_dispatch:
+    inputs:
+      niches:
+        description: 'Target Niches / ICP Queries (comma-separated)'
+        required: true
+        default: 'business coach'
+        type: string
+      workers:
+        description: 'Number of Parallel GitHub Action Workers (Each runs on a unique IP)'
+        required: true
+        default: '5'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+          - '8'
+          - '10'
+          - '15'
+          - '20'
+      max_channels_per_worker:
+        description: 'Target leads per worker'
+        required: true
+        default: '50'
+        type: string
+      require_email:
+        description: 'Require valid email? (false = keep all channels, true = only keep with email)'
+        required: true
+        default: false
+        type: boolean
+      require_domain:
+        description: 'Require custom website/domain? (filter out channels without website)'
+        required: true
+        default: false
+        type: boolean
+      require_skool:
+        description: 'Require Skool community? (filter only channels with a Skool group)'
+        required: true
+        default: false
+        type: boolean
+      speed_delay_ms:
+        description: 'Speed / Delay between requests (ms) - lower is faster, higher is safer'
+        required: true
+        default: '500'
+        type: choice
+        options:
+          - '200'
+          - '500'
+          - '800'
+          - '1200'
+          - '2000'
+      scan_video_count:
+        description: 'Recent videos to scan per channel for emails/links'
+        required: true
+        default: '3'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '5'
+      deep_scan_website:
+        description: 'Deep scan external website homepage and /contact for business emails'
+        required: true
+        default: true
+        type: boolean
+      max_upload_age_days:
+        description: 'Uploaded within last X days? (e.g. 7, 14, 30, 60, 90, 180, 365, or 0 for any)'
+        required: false
+        default: '30'
+        type: choice
+        options:
+          - '0'
+          - '7'
+          - '14'
+          - '30'
+          - '60'
+          - '90'
+          - '180'
+          - '365'
+      exclude_third_world:
+        description: 'Strictly exclude 3rd world countries? (Bans India, Pakistan, Bangladesh, Nigeria, Philippines, etc.)'
+        required: true
+        default: true
+        type: boolean
+      target_countries:
+        description: 'Target Countries strictly (comma-separated, e.g. USA, UK, Australia, Austria)'
+        required: false
+        default: 'USA, UK, Australia, Austria'
+        type: string
+      tier1_only:
+        description: 'Strict Tier-1 Countries Only (USA, UK, Canada, Australia, NZ, Europe Tier-1)'
+        required: true
+        default: false
+        type: boolean
+      min_subscribers:
+        description: 'Minimum Subscribers (e.g. 1000 or 0 for any)'
+        required: false
+        default: '1000'
+        type: string
+      max_subscribers:
+        description: 'Maximum Subscribers (e.g. 20000 or 0 for no limit)'
+        required: false
+        default: '20000'
+        type: string
+      min_views:
+        description: 'Minimum Channel Views (e.g. 10000 or 0 for any)'
+        required: false
+        default: '0'
+        type: string
+      business_keywords:
+        description: 'Optional business keywords filter (comma-separated, or leave blank)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  scrape_workers:
+    name: Worker #${{ matrix.worker }} (Independent Runner & IP)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - name: Check if Worker is active
+        id: check_active
+        run: |
+          if [ "${{ matrix.worker }}" -le "${{ inputs.workers }}" ]; then
+            echo "active=true" >> $GITHUB_OUTPUT
+            echo "Worker #${{ matrix.worker }} is ACTIVE (Running up to ${{ inputs.workers }} workers)"
+          else
+            echo "active=false" >> $GITHUB_OUTPUT
+            echo "Worker #${{ matrix.worker }} is skipped (Exceeds requested ${{ inputs.workers }} workers)"
+          fi
+
+      - name: Checkout Repository
+        if: steps.check_active.outputs.active == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: steps.check_active.outputs.active == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        if: steps.check_active.outputs.active == 'true'
+        run: |
+          cd youtube-zenith
+          npm ci || npm install --omit=dev
+
+      - name: Log Runner Public IP
+        if: steps.check_active.outputs.active == 'true'
+        run: |
+          echo "🌐 Runner Public IP:"
+          curl -s https://api.ipify.org || echo "Could not determine IP"
+          echo ""
+
+      - name: Execute Zenith Worker #${{ matrix.worker }}
+        if: steps.check_active.outputs.active == 'true'
+        run: |
+          cd youtube-zenith
+          mkdir -p output
+          node --max-http-header-size=65536 run_cli.js \
+            --worker ${{ matrix.worker }} \
+            --total-workers ${{ inputs.workers }} \
+            --niches "${{ inputs.niches }}" \
+            --limit ${{ inputs.max_channels_per_worker }} \
+            --require-email ${{ inputs.require_email }} \
+            --require-domain ${{ inputs.require_domain }} \
+            --require-skool ${{ inputs.require_skool }} \
+            --exclude-third-world ${{ inputs.exclude_third_world }} \
+            --tier1-only ${{ inputs.tier1_only }} \
+            --target-countries "${{ inputs.target_countries }}" \
+            --min-subs "${{ inputs.min_subscribers }}" \
+            --max-subs "${{ inputs.max_subscribers }}" \
+            --min-views "${{ inputs.min_views }}" \
+            --max-upload-days "${{ inputs.max_upload_age_days }}" \
+            --delay ${{ inputs.speed_delay_ms }} \
+            --video-count ${{ inputs.scan_video_count }} \
+            --deep-website ${{ inputs.deep_scan_website }} \
+            --business-keywords "${{ inputs.business_keywords }}" \
+            --output-dir output
+
+      - name: Upload Worker Output Artifact
+        if: steps.check_active.outputs.active == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenith-worker-${{ matrix.worker }}-output
+          path: |
+            youtube-zenith/output/zenith_worker_${{ matrix.worker }}.csv
+            youtube-zenith/output/zenith_worker_${{ matrix.worker }}.xlsx
+            youtube-zenith/output/zenith_worker_${{ matrix.worker }}.json
+          retention-days: 7
+
+  aggregate_master:
+    name: Consolidate Master Leads & Export
+    needs: [scrape_workers]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          cd youtube-zenith
+          npm ci || npm install --omit=dev
+
+      - name: Download All Worker Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-worker-artifacts
+
+      - name: Aggregate & Merge Master Leads
+        run: |
+          mkdir -p aggregated_input
+          mkdir -p master_output
+          # Flatten all downloaded worker files into a single input folder
+          find all-worker-artifacts -name "zenith_worker_*.json" -exec cp {} aggregated_input/ \;
+          ls -la aggregated_input/
+          cd youtube-zenith
+          node aggregate.js ../aggregated_input ../master_output
+
+      - name: Upload Consolidated Master Leads (CSV & Excel)
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenith-leads-master-${{ github.run_id }}
+          path: |
+            master_output/zenith_leads_master.xlsx
+            master_output/zenith_leads_master.csv
+            master_output/zenith_leads_master.json
+          retention-days: 30
+

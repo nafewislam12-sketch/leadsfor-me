@@ -1,0 +1,25 @@
+{
+  "name": "youtube-zenith",
+  "version": "1.0.0",
+  "description": "",
+  "main": "zenith_scraper.js",
+  "scripts": {
+    "start": "node --max-http-header-size=65536 server.js",
+    "scrape": "node --max-http-header-size=65536 run_cli.js",
+    "aggregate": "node aggregate.js",
+    "test": "node --max-http-header-size=65536 run_cli.js --limit 2 --delay 200"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^13.2.0",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "ws": "^8.23.0",
+    "xlsx": "^0.18.5"
+  }
+}
