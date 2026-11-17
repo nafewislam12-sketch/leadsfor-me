@@ -904,13 +904,84 @@ function exportResults(leads, outputBasePath) {
 }
 
 /**
+ * Exhaustive Query Expansion Engine
+ * Generates hundreds/thousands of laser-focused permutations for any niche
+ */
+function generateExpandedQueryMatrix(baseNiches = ['business coach'], targetCountries = []) {
+  const defaultGeos = [
+    'USA', 'US', 'United States', 'New York', 'California', 'Texas', 'Florida', 'Austin',
+    'Miami', 'Chicago', 'Los Angeles', 'Atlanta', 'Dallas', 'Seattle', 'Denver', 'Boston',
+    'UK', 'United Kingdom', 'London', 'Manchester', 'Birmingham', 'Leeds', 'Bristol', 'Edinburgh',
+    'Australia', 'Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide',
+    'Austria', 'Vienna', 'Wien', 'Salzburg'
+  ];
+
+  const customGeos = (targetCountries && targetCountries.length > 0)
+    ? [...new Set([...targetCountries, ...defaultGeos])]
+    : defaultGeos;
+
+  const coachingRoles = [
+    'business coach', 'business coaching', 'executive coach', 'business consultant',
+    'business mentor', 'growth consultant', 'sales coach', 'scaling coach',
+    'agency coach', 'smb business coach', 'b2b coach', 'online business coach',
+    'high ticket business coach'
+  ];
+
+  const topics = [
+    'client acquisition', 'scaling to 7 figures', 'scaling to 6 figures',
+    'high ticket sales', 'b2b lead generation', 'funnels & systems',
+    'operations & hiring', 'lead generation', 'mastermind', 'podcast',
+    'agency scaling', 'consulting business model', 'closing high ticket',
+    'entrepreneur growth', 'interview', 'case study', 'for entrepreneurs',
+    'for founders', 'for CEOs', 'for agency owners', 'small business growth',
+    'sales training', 'framework & roadmap', 'cold email outreach'
+  ];
+
+  const queries = new Set();
+
+  for (const rawNiche of baseNiches) {
+    const cleanNiche = rawNiche.trim();
+    if (!cleanNiche) continue;
+
+    const isCoaching = cleanNiche.toLowerCase().includes('coach') || cleanNiche.toLowerCase().includes('business');
+    const rolesToUse = isCoaching ? coachingRoles : [cleanNiche];
+
+    for (const role of rolesToUse) {
+      queries.add(role);
+
+      // Role + Geo
+      for (const geo of customGeos) {
+        queries.add(`${role} ${geo}`);
+      }
+
+      // Role + Topic
+      for (const topic of topics) {
+        queries.add(`${role} ${topic}`);
+        queries.add(`${topic} ${role}`);
+      }
+    }
+
+    // Role + Topic + Geo permutations
+    for (const role of rolesToUse.slice(0, 6)) {
+      for (const topic of topics.slice(0, 8)) {
+        for (const geo of ['USA', 'UK', 'Australia', 'Austria', 'Austin', 'London', 'Sydney']) {
+          queries.add(`${role} ${topic} ${geo}`);
+        }
+      }
+    }
+  }
+
+  return Array.from(queries);
+}
+
+/**
  * Main Run Function for a Worker
  */
 async function runWorker(config) {
   const {
     workerId = 1,
     totalWorkers = 1,
-    niches = ['b2b saas founder', 'real estate coach'],
+    niches = ['business coach'],
     maxChannelsPerWorker = 30,
     filters = {
       requireEmail: false,
@@ -931,132 +1002,98 @@ async function runWorker(config) {
   console.log(`  🚀 ZENITH YOUTUBE SCRAPER: WORKER #${workerId} / ${totalWorkers}`);
   console.log(`====================================================`);
   console.log(`Target Niches:`, niches.join(' | '));
-  console.log(`Max Channels per Worker:`, maxChannelsPerWorker);
+  console.log(`Max Channels per Worker (Goal):`, maxChannelsPerWorker);
   console.log(`Filters:`, JSON.stringify(filters));
   console.log(`Speed Delay:`, `${scrapingOptions.requestDelayMs}ms`);
   console.log(`Deep Website Scan:`, scrapingOptions.deepScanWebsite);
   console.log(`----------------------------------------------------`);
 
-  // Intelligently partition queries so multiple workers NEVER scrape the same channels
-  let activeNiches = [];
-  if (niches.length >= totalWorkers) {
-    // Normal modulo distribution when enough distinct niches were passed
-    activeNiches = niches.filter((_, idx) => (idx % totalWorkers) === (workerId - 1));
-  } else {
-    // Single niche or few niches: auto-expand into targeted non-overlapping sub-queries
-    const targetGeoList = (filters.targetCountries && filters.targetCountries.length > 0)
-      ? filters.targetCountries
-      : ['USA', 'UK', 'Australia', 'Austria'];
+  // 1. Generate full query pool (hundreds or thousands of unique queries)
+  const allQueries = generateExpandedQueryMatrix(niches, filters.targetCountries);
 
-    const modifiers = [
-      ...targetGeoList,
-      'executive',
-      'for entrepreneurs',
-      'small business',
-      'scaling & growth',
-      'b2b',
-      'online',
-      'high ticket',
-      'client acquisition',
-      'podcast',
-      'mastermind',
-      'interview',
-      'growth mentor',
-      'strategy & consulting',
-      'sales training',
-      'tips & framework',
-      'case study'
-    ];
+  // 2. Distribute non-overlapping queries to this worker
+  const activeNiches = allQueries.filter((_, idx) => (idx % totalWorkers) === (workerId - 1));
 
-    const expandedList = [];
-    for (const baseNiche of niches) {
-      expandedList.push(baseNiche);
-      for (const mod of modifiers) {
-        if (targetGeoList.includes(mod)) {
-          expandedList.push(`${baseNiche} ${mod}`);
-        } else {
-          expandedList.push(`${mod} ${baseNiche}`);
+  console.log(`Worker #${workerId} assigned ${activeNiches.length} unique search queries (out of ${allQueries.length} total permutations).`);
+  console.log(`Sample first 5 queries:`, activeNiches.slice(0, 5).join(' | '));
+
+  const outPath = path.join(outputDir, `zenith_worker_${workerId}`);
+  const processedLeads = [];
+  const seenChannelIds = new Set();
+  let totalInspected = 0;
+
+  // CONTINUOUS STREAMING CRAWL: Grinds through queries until TARGET IS HIT!
+  for (let qIdx = 0; qIdx < activeNiches.length; qIdx++) {
+    if (processedLeads.length >= maxChannelsPerWorker) {
+      console.log(`\n🎯🎯 [Worker ${workerId}] TARGET COMPLETED! Reached ${processedLeads.length}/${maxChannelsPerWorker} matching leads.`);
+      break;
+    }
+
+    const currentQuery = activeNiches[qIdx];
+    console.log(`\n====================================================`);
+    console.log(`[Worker ${workerId}] Query [${qIdx + 1}/${activeNiches.length}]: "${currentQuery}"`);
+    console.log(`Current Progress: ${processedLeads.length}/${maxChannelsPerWorker} valid leads | Inspected: ${totalInspected}`);
+    console.log(`====================================================`);
+
+    // Fetch candidates for this query
+    const candidates = await searchYouTubeChannels(currentQuery, 35);
+    console.log(`[Worker ${workerId}] Found ${candidates.length} candidates from search.`);
+
+    for (const raw of candidates) {
+      if (processedLeads.length >= maxChannelsPerWorker) {
+        break;
+      }
+
+      if (seenChannelIds.has(raw.channelId)) {
+        continue;
+      }
+      seenChannelIds.add(raw.channelId);
+
+      totalInspected++;
+      console.log(`[Worker ${workerId}] [Inspecting #${totalInspected}] ${raw.title} (${raw.handle || raw.channelId})...`);
+
+      const lead = await fetchChannelDeepDetails(raw, scrapingOptions);
+      lead.workerId = workerId;
+      lead.targetNiche = currentQuery;
+
+      if (passesFilters(lead, filters)) {
+        processedLeads.push(lead);
+        const emailStatus = lead.hasEmail ? `✅ EMAIL: ${lead.primaryEmail}` : '❌ No Email';
+        const domainStatus = lead.hasCustomDomain ? `🌐 ${lead.websiteUrl}` : 'No Website';
+        const skoolStatus = lead.hasSkool ? `🎒 Skool: ${lead.skoolLink}` : '';
+        const countryTag = lead.country ? `🌍 ${lead.country}` : '🌍 Target Geo';
+        const subsTag = `👥 Subs: ${lead.subscribers || lead.subscribersNum || 'N/A'}`;
+        const viewsTag = `👁️ Views: ${lead.views || lead.viewsNum || 'N/A'}`;
+        const uploadTag = `📅 Upload: ${lead.lastUploadText || 'N/A'}`;
+        console.log(`   🎯 [${processedLeads.length}/${maxChannelsPerWorker}] MATCH! ${countryTag} | ${subsTag} | ${viewsTag} | ${uploadTag} | ${emailStatus} | ${domainStatus} ${skoolStatus}`);
+
+        // Incremental save every 3 leads so no work is ever lost
+        if (processedLeads.length % 3 === 0 || processedLeads.length === maxChannelsPerWorker) {
+          exportResults(processedLeads, outPath);
         }
+      } else {
+        console.log(`   └─ Filtered out (Country: "${lead.country || 'Unknown'}", Subs: ${lead.subscribersNum}, Views: ${lead.viewsNum}, Last Upload: "${lead.lastUploadText || 'None'}")`);
+      }
+
+      if (onProgress) {
+        onProgress({
+          workerId,
+          current: totalInspected,
+          leadCount: processedLeads.length,
+          latestLead: lead
+        });
       }
     }
 
-    activeNiches = expandedList.filter((_, idx) => (idx % totalWorkers) === (workerId - 1));
-  }
-
-  if (activeNiches.length === 0) {
-    activeNiches = niches;
-  }
-
-  console.log(`Worker #${workerId} assigned queries:`, activeNiches.join(', '));
-
-  const allRawChannels = new Map();
-  const channelsPerNiche = Math.ceil(maxChannelsPerWorker / activeNiches.length);
-
-  // 1. Search YouTube for each assigned query
-  for (const niche of activeNiches) {
-    console.log(`[Worker ${workerId}] Searching YouTube for: "${niche}"...`);
-    const results = await searchYouTubeChannels(niche, channelsPerNiche * 2);
-    results.forEach(c => {
-      if (!allRawChannels.has(c.channelId)) {
-        allRawChannels.set(c.channelId, { ...c, query: niche });
-      }
-    });
-    console.log(`[Worker ${workerId}] Found ${results.length} channel candidates for "${niche}".`);
     await sleep(scrapingOptions.requestDelayMs);
   }
 
-  const rawList = Array.from(allRawChannels.values());
-  console.log(`[Worker ${workerId}] Total unique channels to inspect: ${rawList.length}`);
-
-  const processedLeads = [];
-  let index = 0;
-
-  // 2. Inspect each channel deeply
-  for (const raw of rawList) {
-    index++;
-    console.log(`[Worker ${workerId}] [${index}/${rawList.length}] Inspecting: ${raw.title} (${raw.handle || raw.channelId})...`);
-    
-    const lead = await fetchChannelDeepDetails(raw, scrapingOptions);
-    lead.workerId = workerId;
-    lead.targetNiche = raw.query;
-
-    if (passesFilters(lead, filters)) {
-      processedLeads.push(lead);
-      const emailStatus = lead.hasEmail ? `✅ EMAIL: ${lead.primaryEmail}` : '❌ No Email';
-      const domainStatus = lead.hasCustomDomain ? `🌐 ${lead.websiteUrl}` : 'No Website';
-      const skoolStatus = lead.hasSkool ? `🎒 Skool: ${lead.skoolLink}` : '';
-      const countryTag = lead.country ? `🌍 ${lead.country}` : '🌍 Global';
-      const subsTag = `👥 Subs: ${lead.subscribers || lead.subscribersNum || 'N/A'}`;
-      const viewsTag = `👁️ Views: ${lead.views || lead.viewsNum || 'N/A'}`;
-      const uploadTag = `📅 Upload: ${lead.lastUploadText || 'N/A'}`;
-      console.log(`   └─ MATCH! ${countryTag} | ${subsTag} | ${viewsTag} | ${uploadTag} | ${emailStatus} | ${domainStatus} ${skoolStatus}`);
-    } else {
-      console.log(`   └─ Filtered out (Country: "${lead.country || 'Unknown'}", Subs: ${lead.subscribersNum}, Views: ${lead.viewsNum}, Last Upload: "${lead.lastUploadText || 'None'}")`);
-    }
-
-    if (onProgress) {
-      onProgress({
-        workerId,
-        current: index,
-        total: rawList.length,
-        leadCount: processedLeads.length,
-        latestLead: lead
-      });
-    }
-
-    if (processedLeads.length >= maxChannelsPerWorker) {
-      console.log(`[Worker ${workerId}] Reached target limit of ${maxChannelsPerWorker} leads.`);
-      break;
-    }
-  }
-
-  // 3. Export results
-  const outPath = path.join(outputDir, `zenith_worker_${workerId}`);
+  // Final export of results
   exportResults(processedLeads, outPath);
 
   const stats = {
     workerId,
-    totalInspected: index,
+    totalInspected,
     totalMatched: processedLeads.length,
     withEmails: processedLeads.filter(l => l.hasEmail).length,
     withWebsites: processedLeads.filter(l => l.hasCustomDomain).length,
