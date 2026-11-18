@@ -299,10 +299,22 @@ async function searchYouTubeChannels(query, limit = 50) {
           'Accept-Language': 'en-US,en;q=0.9'
         }
       });
-      if (!res || !res.ok) return;
+      if (!res || !res.ok) {
+        if (res && res.status === 429) {
+          console.warn(`[Zenith] ⚠️ YouTube 429 Rate Limit hit. Backing off for 15s...`);
+          await sleep(15000);
+        }
+        return;
+      }
       const html = await res.text();
       const match = html.match(/var ytInitialData = ({.*?});<\/script>/s) || html.match(/ytInitialData\s*=\s*({.+?});/s);
-      if (!match) return;
+      if (!match) {
+        if (html.includes('consent.youtube.com') || html.includes('captcha')) {
+          console.warn(`[Zenith] ⚠️ YouTube challenge or consent encountered. Waiting 10s...`);
+          await sleep(10000);
+        }
+        return;
+      }
 
       const data = JSON.parse(match[1]);
       const sectionList = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
@@ -1048,22 +1060,39 @@ async function runWorker(config) {
       const subIndustries = [
         'real estate', 'fitness', 'saas', 'ecommerce', 'home service',
         'trade & construction', 'roofing', 'cleaning', 'accounting',
-        'marketing agency', 'consulting', 'dental', 'clinic', 'law firm'
+        'marketing agency', 'consulting', 'dental', 'clinic', 'law firm',
+        'smb', 'b2b', 'startup', 'financial', 'executive', 'sales'
       ];
-      const actionWords = ['scaling', 'grow revenue', 'client acquisition', 'mentorship', 'consulting'];
-      const targetGeos = (filters.targetCountries && filters.targetCountries.length > 0)
-        ? filters.targetCountries
-        : ['USA', 'UK', 'Australia', 'Austria'];
+      const cities = [
+        'New York', 'London', 'Sydney', 'Austin', 'Miami', 'Chicago',
+        'Los Angeles', 'Atlanta', 'Dallas', 'Manchester', 'Melbourne',
+        'Brisbane', 'Vienna', 'Denver', 'Seattle', 'Boston', 'Phoenix',
+        'Houston', 'San Francisco', 'Birmingham', 'Leeds'
+      ];
+      const topics = [
+        'scaling', 'client acquisition', 'lead generation', 'sales',
+        'high ticket', 'operations', 'systems', 'roadmap', 'interview', 'podcast'
+      ];
 
       const newBatch = [];
+      // 1. Industry + Role (e.g. "roofing business coach", "real estate coach")
       for (const ind of subIndustries) {
-        for (const act of actionWords) {
-          for (const geo of targetGeos) {
-            newBatch.push(`${ind} business coach ${act} ${geo}`);
-          }
-        }
+        newBatch.push(`${ind} business coach`);
+        newBatch.push(`${ind} coach`);
       }
-      // Distribute modulo
+      // 2. Role + City (e.g. "business coach Austin", "business coach London")
+      for (const city of cities) {
+        newBatch.push(`business coach ${city}`);
+        newBatch.push(`business mentor ${city}`);
+        newBatch.push(`executive coach ${city}`);
+      }
+      // 3. Topic + Role (e.g. "client acquisition coach", "sales business coach")
+      for (const top of topics) {
+        newBatch.push(`${top} business coach`);
+        newBatch.push(`business coaching ${top}`);
+      }
+
+      // Distribute modulo across workers
       const workerNewBatch = newBatch.filter((_, idx) => (idx % totalWorkers) === (workerId - 1));
       queryQueue.push(...workerNewBatch);
 
@@ -1071,9 +1100,7 @@ async function runWorker(config) {
         // Fallback: alphabet expansion
         const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
         for (const char of alphabet) {
-          for (const geo of targetGeos) {
-            queryQueue.push(`business coach ${char} ${geo}`);
-          }
+          queryQueue.push(`business coach ${char}`);
         }
       }
     }
