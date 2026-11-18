@@ -127,50 +127,50 @@ on:
         type: string
 
 jobs:
+  generate_matrix:
+    name: Initialize Dynamic Worker Fleet
+    runs-on: ubuntu-latest
+    outputs:
+      workers: ${{ steps.set_matrix.outputs.workers }}
+    steps:
+      - name: Compute Dynamic Workers Matrix
+        id: set_matrix
+        run: |
+          COUNT="${{ inputs.workers }}"
+          JSON_ARRAY=$(node -e "const n = parseInt(process.env.COUNT, 10) || 20; console.log(JSON.stringify(Array.from({length: n}, (_, i) => i + 1)));")
+          echo "workers=$JSON_ARRAY" >> $GITHUB_OUTPUT
+        env:
+          COUNT: ${{ inputs.workers }}
+
   scrape_workers:
     name: Worker #${{ matrix.worker }} (Independent Runner & IP)
+    needs: [generate_matrix]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100]
+        worker: ${{ fromJson(needs.generate_matrix.outputs.workers) }}
     steps:
-      - name: Check if Worker is active
-        id: check_active
-        run: |
-          if [ "${{ matrix.worker }}" -le "${{ inputs.workers }}" ]; then
-            echo "active=true" >> $GITHUB_OUTPUT
-            echo "Worker #${{ matrix.worker }} is ACTIVE (Running up to ${{ inputs.workers }} workers)"
-          else
-            echo "active=false" >> $GITHUB_OUTPUT
-            echo "Worker #${{ matrix.worker }} is skipped (Exceeds requested ${{ inputs.workers }} workers)"
-          fi
-
       - name: Checkout Repository
-        if: steps.check_active.outputs.active == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        if: steps.check_active.outputs.active == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Dependencies
-        if: steps.check_active.outputs.active == 'true'
         run: |
           cd youtube-zenith
           npm ci || npm install --omit=dev
 
       - name: Log Runner Public IP
-        if: steps.check_active.outputs.active == 'true'
         run: |
           echo "🌐 Runner Public IP:"
           curl -s https://api.ipify.org || echo "Could not determine IP"
           echo ""
 
       - name: Execute Zenith Worker #${{ matrix.worker }}
-        if: steps.check_active.outputs.active == 'true'
         run: |
           cd youtube-zenith
           mkdir -p output
@@ -196,7 +196,6 @@ jobs:
             --output-dir output
 
       - name: Upload Worker Output Artifact
-        if: steps.check_active.outputs.active == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: zenith-worker-${{ matrix.worker }}-output
