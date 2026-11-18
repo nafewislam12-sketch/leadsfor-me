@@ -98,10 +98,12 @@ function getChannelUrl(handleOrId) {
 }
 
 async function safeFetch(url, options = {}, retries = 2) {
+  const timeoutMs = options.timeoutMs || 8000;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(url, {
         ...options,
+        signal: AbortSignal.timeout(timeoutMs),
         headers: {
           'User-Agent': getRandomUserAgent(),
           ...options.headers
@@ -110,12 +112,12 @@ async function safeFetch(url, options = {}, retries = 2) {
       return res;
     } catch (err) {
       if (attempt === retries) {
-        const detail = err.cause ? `${err.message} (${err.cause})` : err.message;
-        throw new Error(`${detail} at ${url}`);
+        return null;
       }
-      await sleep(1000 * (attempt + 1));
+      await sleep(500 * (attempt + 1));
     }
   }
+  return null;
 }
 
 // Email blacklist & validation patterns
@@ -1022,21 +1024,66 @@ async function runWorker(config) {
   const seenChannelIds = new Set();
   let totalInspected = 0;
 
-  // CONTINUOUS STREAMING CRAWL: Grinds through queries until TARGET IS HIT!
-  for (let qIdx = 0; qIdx < activeNiches.length; qIdx++) {
-    if (processedLeads.length >= maxChannelsPerWorker) {
-      console.log(`\n🎯🎯 [Worker ${workerId}] TARGET COMPLETED! Reached ${processedLeads.length}/${maxChannelsPerWorker} matching leads.`);
-      break;
+  // CONTINUOUS INFINITE STREAMING CRAWL: Grinds through queries until TARGET IS HIT!
+  const queryQueue = [...activeNiches];
+  let round = 1;
+
+  while (processedLeads.length < maxChannelsPerWorker) {
+    if (queryQueue.length === 0) {
+      round++;
+      console.log(`\n🔄 [Worker ${workerId}] Generating Round ${round} fresh queries to reach target (${processedLeads.length}/${maxChannelsPerWorker} leads)...`);
+      
+      const subIndustries = [
+        'real estate', 'fitness', 'saas', 'ecommerce', 'home service',
+        'trade & construction', 'roofing', 'cleaning', 'accounting',
+        'marketing agency', 'consulting', 'dental', 'clinic', 'law firm'
+      ];
+      const actionWords = ['scaling', 'grow revenue', 'client acquisition', 'mentorship', 'consulting'];
+      const targetGeos = (filters.targetCountries && filters.targetCountries.length > 0)
+        ? filters.targetCountries
+        : ['USA', 'UK', 'Australia', 'Austria'];
+
+      const newBatch = [];
+      for (const ind of subIndustries) {
+        for (const act of actionWords) {
+          for (const geo of targetGeos) {
+            newBatch.push(`${ind} business coach ${act} ${geo}`);
+          }
+        }
+      }
+      // Distribute modulo
+      const workerNewBatch = newBatch.filter((_, idx) => (idx % totalWorkers) === (workerId - 1));
+      queryQueue.push(...workerNewBatch);
+
+      if (queryQueue.length === 0) {
+        // Fallback: alphabet expansion
+        const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+        for (const char of alphabet) {
+          for (const geo of targetGeos) {
+            queryQueue.push(`business coach ${char} ${geo}`);
+          }
+        }
+      }
     }
 
-    const currentQuery = activeNiches[qIdx];
+    const currentQuery = queryQueue.shift();
+    if (!currentQuery) break;
+
     console.log(`\n====================================================`);
-    console.log(`[Worker ${workerId}] Query [${qIdx + 1}/${activeNiches.length}]: "${currentQuery}"`);
+    console.log(`[Worker ${workerId}] Query: "${currentQuery}"`);
     console.log(`Current Progress: ${processedLeads.length}/${maxChannelsPerWorker} valid leads | Inspected: ${totalInspected}`);
     console.log(`====================================================`);
 
     // Fetch candidates for this query
-    const candidates = await searchYouTubeChannels(currentQuery, 35);
+    let candidates = [];
+    try {
+      candidates = await searchYouTubeChannels(currentQuery, 35);
+    } catch (err) {
+      console.warn(`[Worker ${workerId}] Search failed for "${currentQuery}": ${err.message}`);
+      await sleep(1000);
+      continue;
+    }
+
     console.log(`[Worker ${workerId}] Found ${candidates.length} candidates from search.`);
 
     for (const raw of candidates) {
@@ -1052,7 +1099,18 @@ async function runWorker(config) {
       totalInspected++;
       console.log(`[Worker ${workerId}] [Inspecting #${totalInspected}] ${raw.title} (${raw.handle || raw.channelId})...`);
 
-      const lead = await fetchChannelDeepDetails(raw, scrapingOptions);
+      let lead;
+      try {
+        // 15-second strict timeout per channel inspection so it NEVER hangs
+        lead = await Promise.race([
+          fetchChannelDeepDetails(raw, scrapingOptions),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Inspection Timeout')), 15000))
+        ]);
+      } catch (err) {
+        console.warn(`   ⚠️ Channel inspection skipped (${err.message})`);
+        continue;
+      }
+
       lead.workerId = workerId;
       lead.targetNiche = currentQuery;
 
@@ -1087,6 +1145,8 @@ async function runWorker(config) {
 
     await sleep(scrapingOptions.requestDelayMs);
   }
+
+  console.log(`\n🎯🎯 [Worker ${workerId}] TARGET COMPLETED! Reached ${processedLeads.length}/${maxChannelsPerWorker} matching leads.`);
 
   // Final export of results
   exportResults(processedLeads, outPath);
