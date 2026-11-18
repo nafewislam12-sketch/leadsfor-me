@@ -1024,6 +1024,18 @@ async function runWorker(config) {
   const seenChannelIds = new Set();
   let totalInspected = 0;
 
+  // Load persistent history of previously scraped channels across all runs
+  const historyFilePath = path.join(__dirname, 'data', 'seen_channels.txt');
+  if (fs.existsSync(historyFilePath)) {
+    try {
+      const savedLines = fs.readFileSync(historyFilePath, 'utf-8').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      savedLines.forEach(id => seenChannelIds.add(id));
+      console.log(`[Worker #${workerId}] 🛡️ Loaded ${seenChannelIds.size} previously scraped channel IDs from history to prevent ANY duplicate.`);
+    } catch (err) {
+      console.warn(`[Worker #${workerId}] Could not load history file:`, err.message);
+    }
+  }
+
   // CONTINUOUS INFINITE STREAMING CRAWL: Grinds through queries until TARGET IS HIT!
   const queryQueue = [...activeNiches];
   let round = 1;

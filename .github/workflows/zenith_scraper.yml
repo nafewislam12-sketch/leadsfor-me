@@ -1,5 +1,8 @@
 name: Zenith YouTube Lead Scraper (Multi-IP Distributed)
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -241,4 +244,14 @@ jobs:
             master_output/zenith_leads_master.csv
             master_output/zenith_leads_master.json
           retention-days: 30
+
+      - name: Auto-Commit Persistent Channel History (Prevent Duplicates Across Runs)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
+          mkdir -p youtube-zenith/data
+          git add youtube-zenith/data/seen_channels.txt || true
+          git commit -m "chore: auto-update persistent scraped channels history [skip ci]" || echo "No new channels to record"
+          git push origin main || echo "Push skipped or no changes"
 

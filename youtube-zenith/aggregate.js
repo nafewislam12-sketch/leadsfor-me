@@ -94,6 +94,32 @@ function aggregateResults(inputDir = './output', outputDir = './output') {
   xlsx.utils.book_append_sheet(workbook, worksheet, 'Zenith Master Leads');
   xlsx.writeFile(workbook, `${masterBasePath}.xlsx`);
 
+  // 4. Update persistent history of seen channels
+  try {
+    const historyDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(historyDir)) {
+      fs.mkdirSync(historyDir, { recursive: true });
+    }
+    const historyFilePath = path.join(historyDir, 'seen_channels.txt');
+    const existingSet = new Set();
+    if (fs.existsSync(historyFilePath)) {
+      fs.readFileSync(historyFilePath, 'utf-8').split(/\r?\n/).forEach(s => {
+        const trim = s.trim();
+        if (trim) existingSet.add(trim);
+      });
+    }
+
+    for (const lead of masterLeads) {
+      if (lead.channelId) existingSet.add(lead.channelId);
+      if (lead.handle) existingSet.add(lead.handle);
+    }
+
+    fs.writeFileSync(historyFilePath, Array.from(existingSet).join('\n'), 'utf-8');
+    console.log(`[Zenith Aggregator] 🛡️ Recorded ${existingSet.size} total channels in persistent history: ${historyFilePath}`);
+  } catch (err) {
+    console.warn('[Zenith Aggregator] Failed to update seen_channels.txt:', err.message);
+  }
+
   // Summary Metrics
   const totalLeads = masterLeads.length;
   const withEmails = masterLeads.filter(l => l.hasEmail).length;
