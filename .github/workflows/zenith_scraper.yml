@@ -18,7 +18,7 @@ on:
       workers:
         description: 'Number of Parallel GitHub Action Workers (Each runs on a unique IP)'
         required: true
-        default: '50'
+        default: '20'
         type: choice
         options:
           - '10'
@@ -30,9 +30,9 @@ on:
           - '75'
           - '100'
       max_channels_per_worker:
-        description: 'Target leads per worker (e.g. 100 leads x 100 workers = 10,000 leads!)'
+        description: 'Target leads per worker (e.g. 500 leads x 20 workers = 10,000 leads!)'
         required: true
-        default: '100'
+        default: '500'
         type: string
       require_email:
         description: 'Require valid email? (false = keep all channels, true = only keep with email)'
@@ -52,7 +52,7 @@ on:
       speed_delay_ms:
         description: 'Speed / Delay between requests (ms) - lower is faster, higher is safer'
         required: true
-        default: '150'
+        default: '100'
         type: choice
         options:
           - '100'

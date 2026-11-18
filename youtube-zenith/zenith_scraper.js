@@ -266,19 +266,13 @@ async function scrapeDomainForEmails(websiteUrl, timeoutMs = 4000) {
   try {
     const baseUrl = new URL(websiteUrl).origin;
     
-    // 1. Check homepage
-    const homeHtml = await fetchWithTimeout(websiteUrl);
+    // Check homepage & /contact in parallel with fast timeout
+    const [homeHtml, contactHtml] = await Promise.all([
+      fetchWithTimeout(websiteUrl),
+      fetchWithTimeout(`${baseUrl}/contact`)
+    ]);
     extractEmails(homeHtml).forEach(e => emails.add(e));
-
-    // 2. If no email, try /contact or /about
-    if (emails.size === 0) {
-      const contactHtml = await fetchWithTimeout(`${baseUrl}/contact`);
-      extractEmails(contactHtml).forEach(e => emails.add(e));
-    }
-    if (emails.size === 0) {
-      const aboutHtml = await fetchWithTimeout(`${baseUrl}/about`);
-      extractEmails(aboutHtml).forEach(e => emails.add(e));
-    }
+    extractEmails(contactHtml).forEach(e => emails.add(e));
   } catch {
     // Ignore URL parse or fetch errors
   }
@@ -653,14 +647,11 @@ async function fetchChannelDeepDetails(channel, options = {}) {
 
           lead.recentVideoTitles = videoTitles.join(' | ');
 
-          // Fetch descriptions of up to N recent videos
-          for (const vid of recentVideoIds.slice(0, scanVideoCount)) {
-            await sleep(requestDelayMs / 2);
+          // Fetch descriptions of up to N recent videos in parallel
+          const videoFetches = recentVideoIds.slice(0, scanVideoCount).map(async (vid) => {
             const watchUrl = `https://www.youtube.com/watch?v=${vid}`;
             const watchRes = await safeFetch(watchUrl, {
-              headers: {
-                'Accept-Language': 'en-US,en;q=0.9'
-              }
+              headers: { 'Accept-Language': 'en-US,en;q=0.9' }
             });
             if (watchRes && watchRes.ok) {
               const watchHtml = await watchRes.text();
@@ -695,7 +686,8 @@ async function fetchChannelDeepDetails(channel, options = {}) {
                 }
               }
             }
-          }
+          });
+          await Promise.all(videoFetches);
         }
       }
     }
@@ -1155,8 +1147,8 @@ async function runWorker(config) {
       }
     }
 
-    // Process in concurrent batches of 3 channels for 3x speed
-    const BATCH_SIZE = 3;
+    // Process in concurrent batches of 6 channels for 6x hyper-speed
+    const BATCH_SIZE = 6;
     for (let i = 0; i < unseen.length; i += BATCH_SIZE) {
       if (processedLeads.length >= maxChannelsPerWorker) break;
 
