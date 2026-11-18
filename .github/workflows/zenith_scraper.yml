@@ -14,22 +14,21 @@ on:
       workers:
         description: 'Number of Parallel GitHub Action Workers (Each runs on a unique IP)'
         required: true
-        default: '5'
+        default: '30'
         type: choice
         options:
-          - '1'
-          - '2'
-          - '3'
-          - '4'
           - '5'
-          - '8'
           - '10'
           - '15'
           - '20'
+          - '25'
+          - '30'
+          - '40'
+          - '50'
       max_channels_per_worker:
         description: 'Target leads per worker'
         required: true
-        default: '50'
+        default: '200'
         type: string
       require_email:
         description: 'Require valid email? (false = keep all channels, true = only keep with email)'
@@ -49,14 +48,15 @@ on:
       speed_delay_ms:
         description: 'Speed / Delay between requests (ms) - lower is faster, higher is safer'
         required: true
-        default: '500'
+        default: '150'
         type: choice
         options:
+          - '100'
+          - '150'
           - '200'
+          - '350'
           - '500'
           - '800'
-          - '1200'
-          - '2000'
       scan_video_count:
         description: 'Recent videos to scan per channel for emails/links'
         required: true
@@ -129,7 +129,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
     steps:
       - name: Check if Worker is active
         id: check_active

@@ -569,6 +569,27 @@ async function fetchChannelDeepDetails(channel, options = {}) {
       if (bioLinkInfo.socials.calendly) lead.calendly = bioLinkInfo.socials.calendly;
     }
 
+    // Compute preliminary metrics
+    lead.subscribersNum = parseNumericCount(lead.subscribers);
+    lead.viewsNum = parseNumericCount(lead.views);
+
+    // ⚡ HYPER-SPEED FAST-FAIL GATE:
+    // If channel already fails sub count or is from banned 3rd world country,
+    // skip slow video downloads and external website crawling immediately (0.05s instead of 5s)!
+    const filters = options.filters || {};
+    if (filters.minSubscribers && filters.minSubscribers > 0 && lead.subscribersNum > 0 && lead.subscribersNum < filters.minSubscribers) {
+      return lead;
+    }
+    if (filters.maxSubscribers && filters.maxSubscribers > 0 && lead.subscribersNum > filters.maxSubscribers) {
+      return lead;
+    }
+    if (filters.excludeThirdWorld && lead.country) {
+      const countryLower = lead.country.toLowerCase().trim();
+      if (THIRD_WORLD_COUNTRIES.includes(countryLower)) {
+        return lead;
+      }
+    }
+
     // 2. Scan recent videos for email in video description
     const targetHandle = lead.handle || channel.handle;
     if (scanVideoCount > 0 && targetHandle) {
@@ -1125,61 +1146,70 @@ async function runWorker(config) {
 
     console.log(`[Worker ${workerId}] Found ${candidates.length} candidates from search.`);
 
+    // Filter unseen candidates
+    const unseen = [];
     for (const raw of candidates) {
-      if (processedLeads.length >= maxChannelsPerWorker) {
-        break;
+      if (!seenChannelIds.has(raw.channelId)) {
+        seenChannelIds.add(raw.channelId);
+        unseen.push(raw);
       }
+    }
 
-      if (seenChannelIds.has(raw.channelId)) {
-        continue;
-      }
-      seenChannelIds.add(raw.channelId);
+    // Process in concurrent batches of 3 channels for 3x speed
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < unseen.length; i += BATCH_SIZE) {
+      if (processedLeads.length >= maxChannelsPerWorker) break;
 
-      totalInspected++;
-      console.log(`[Worker ${workerId}] [Inspecting #${totalInspected}] ${raw.title} (${raw.handle || raw.channelId})...`);
-
-      let lead;
-      try {
-        // 15-second strict timeout per channel inspection so it NEVER hangs
-        lead = await Promise.race([
-          fetchChannelDeepDetails(raw, scrapingOptions),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Inspection Timeout')), 15000))
-        ]);
-      } catch (err) {
-        console.warn(`   ⚠️ Channel inspection skipped (${err.message})`);
-        continue;
-      }
-
-      lead.workerId = workerId;
-      lead.targetNiche = currentQuery;
-
-      if (passesFilters(lead, filters)) {
-        processedLeads.push(lead);
-        const emailStatus = lead.hasEmail ? `✅ EMAIL: ${lead.primaryEmail}` : '❌ No Email';
-        const domainStatus = lead.hasCustomDomain ? `🌐 ${lead.websiteUrl}` : 'No Website';
-        const skoolStatus = lead.hasSkool ? `🎒 Skool: ${lead.skoolLink}` : '';
-        const countryTag = lead.country ? `🌍 ${lead.country}` : '🌍 Target Geo';
-        const subsTag = `👥 Subs: ${lead.subscribers || lead.subscribersNum || 'N/A'}`;
-        const viewsTag = `👁️ Views: ${lead.views || lead.viewsNum || 'N/A'}`;
-        const uploadTag = `📅 Upload: ${lead.lastUploadText || 'N/A'}`;
-        console.log(`   🎯 [${processedLeads.length}/${maxChannelsPerWorker}] MATCH! ${countryTag} | ${subsTag} | ${viewsTag} | ${uploadTag} | ${emailStatus} | ${domainStatus} ${skoolStatus}`);
-
-        // Incremental save every 3 leads so no work is ever lost
-        if (processedLeads.length % 3 === 0 || processedLeads.length === maxChannelsPerWorker) {
-          exportResults(processedLeads, outPath);
+      const batch = unseen.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(batch.map(async (raw) => {
+        try {
+          const inspected = await Promise.race([
+            fetchChannelDeepDetails(raw, { ...scrapingOptions, filters }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Inspection Timeout')), 12000))
+          ]);
+          if (inspected) {
+            inspected.workerId = workerId;
+            inspected.targetNiche = currentQuery;
+          }
+          return inspected;
+        } catch {
+          return null;
         }
-      } else {
-        console.log(`   └─ Filtered out (Country: "${lead.country || 'Unknown'}", Subs: ${lead.subscribersNum}, Views: ${lead.viewsNum}, Last Upload: "${lead.lastUploadText || 'None'}")`);
+      }));
+
+      for (const lead of batchResults) {
+        if (!lead) continue;
+        totalInspected++;
+        if (passesFilters(lead, filters)) {
+          processedLeads.push(lead);
+          const emailStatus = lead.hasEmail ? `✅ EMAIL: ${lead.primaryEmail}` : '❌ No Email';
+          const domainStatus = lead.hasCustomDomain ? `🌐 ${lead.websiteUrl}` : 'No Website';
+          const skoolStatus = lead.hasSkool ? `🎒 Skool: ${lead.skoolLink}` : '';
+          const countryTag = lead.country ? `🌍 ${lead.country}` : '🌍 Target Geo';
+          const subsTag = `👥 Subs: ${lead.subscribers || lead.subscribersNum || 'N/A'}`;
+          const viewsTag = `👁️ Views: ${lead.views || lead.viewsNum || 'N/A'}`;
+          const uploadTag = `📅 Upload: ${lead.lastUploadText || 'N/A'}`;
+          console.log(`   🎯 [${processedLeads.length}/${maxChannelsPerWorker}] MATCH! ${countryTag} | ${subsTag} | ${viewsTag} | ${uploadTag} | ${emailStatus} | ${domainStatus} ${skoolStatus}`);
+
+          // Incremental save every 3 leads so no work is ever lost
+          if (processedLeads.length % 3 === 0 || processedLeads.length === maxChannelsPerWorker) {
+            exportResults(processedLeads, outPath);
+          }
+        } else {
+          console.log(`   └─ Filtered out (${lead.title}: Country: "${lead.country || 'Unknown'}", Subs: ${lead.subscribersNum}, Last Upload: "${lead.lastUploadText || 'None'}")`);
+        }
+
+        if (onProgress) {
+          onProgress({
+            workerId,
+            current: totalInspected,
+            leadCount: processedLeads.length,
+            latestLead: lead
+          });
+        }
       }
 
-      if (onProgress) {
-        onProgress({
-          workerId,
-          current: totalInspected,
-          leadCount: processedLeads.length,
-          latestLead: lead
-        });
-      }
+      await sleep(Math.max(100, scrapingOptions.requestDelayMs / 2));
     }
 
     await sleep(scrapingOptions.requestDelayMs);
