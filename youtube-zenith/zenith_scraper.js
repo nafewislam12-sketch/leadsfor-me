@@ -71,6 +71,7 @@ function parseNumericCount(text) {
 function parseDaysAgo(text) {
   if (!text) return 9999;
   const clean = text.toLowerCase().trim();
+  if (clean.includes('premiere') || clean.includes('stream') || clean.includes('live')) return 0;
   const yearMatch = clean.match(/(\d+)\s*(?:y|year|years)/);
   if (yearMatch) return parseInt(yearMatch[1], 10) * 365;
   const monthMatch = clean.match(/(\d+)\s*(?:mo|month|months)/);
@@ -125,6 +126,7 @@ const EMAIL_BLACKLIST = [
   'example.com', 'domain.com', 'email.com', 'yourcompany.com',
   'sentry.io', 'wixpress.com', 'squarespace.com', 'shopify.com',
   'google.com', 'youtube.com', 'ytimg.com', 'github.com',
+  'patreon.com', 'facebook.com', 'instagram.com', 'twitter.com',
   '2x.png', '3x.png', 'default.jpg', 'hqdefault.jpg'
 ];
 
@@ -136,8 +138,9 @@ const JUNK_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif', '.css
 function extractEmails(text) {
   if (!text || typeof text !== 'string') return [];
 
-  // Obfuscated email fixes: "name [at] domain [dot] com" or "name (at) domain.com"
+  // Obfuscated email fixes & clean encoded entities (e.g. \u003e or &gt;)
   const cleanText = text
+    .replace(/\\u003c|\\u003e|u003c|u003e|&lt;|&gt;|&amp;/gi, ' ')
     .replace(/\[at\]|\(at\)/gi, '@')
     .replace(/\[dot\]|\(dot\)/gi, '.')
     .replace(/\s*@\s*/g, '@');
@@ -281,15 +284,100 @@ async function scrapeDomainForEmails(websiteUrl, timeoutMs = 4000) {
 }
 
 /**
- * YouTube Data Scraper: Queries channels
+ * YouTube Data Scraper: Dual-Engine (InnerTube API + HTML Fallback with Consent Bypass)
  */
 async function searchYouTubeChannels(query, limit = 50) {
   const channels = new Map();
 
-  async function executeSearch(url) {
+  function parseSearchSections(sectionList) {
+    for (const section of sectionList) {
+      const items = section.itemSectionRenderer?.contents || [];
+      for (const item of items) {
+        // Channel search result
+        if (item.channelRenderer) {
+          const c = item.channelRenderer;
+          const channelId = c.channelId;
+          const handle = c.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '';
+          const title = c.title?.simpleText || '';
+          const desc = c.descriptionSnippet?.runs?.map(r => r.text).join('') || '';
+          const subs = c.videoCountText?.simpleText || c.subscriberCountText?.simpleText || '';
+
+          if (channelId && !channels.has(channelId)) {
+            channels.set(channelId, {
+              channelId,
+              handle,
+              title,
+              subscribers: subs,
+              bioSnippet: desc
+            });
+          }
+        }
+
+        // Video search result (extract creator channel)
+        if (item.videoRenderer) {
+          const v = item.videoRenderer;
+          const owner = v.ownerText?.runs?.[0];
+          const channelEndpoint = owner?.navigationEndpoint?.browseEndpoint;
+          const channelId = channelEndpoint?.browseId;
+          const handle = channelEndpoint?.canonicalBaseUrl || '';
+          const title = owner?.text || '';
+
+          if (channelId && !channels.has(channelId)) {
+            channels.set(channelId, {
+              channelId,
+              handle,
+              title,
+              subscribers: '',
+              bioSnippet: ''
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 1. Primary Engine: YouTube InnerTube API (Never blocked by HTML consent redirects!)
+  async function executeInnerTubeSearch(params) {
+    try {
+      const payload = {
+        context: {
+          client: {
+            clientName: "WEB",
+            clientVersion: "2.20241101.01.00",
+            gl: "US",
+            hl: "en"
+          }
+        },
+        query: query
+      };
+      if (params) payload.params = params;
+
+      const res = await safeFetch('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': 'SOCS=CAESEwgDEgk2OTg0NzgxMDUaAmVuIAEaBgiA_LyaBg; CONSENT=YES+cb; PREF=hl=en&gl=US;',
+          'X-YouTube-Client-Name': '1',
+          'X-YouTube-Client-Version': '2.20241101.01.00'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res || !res.ok) return;
+      const data = await res.json();
+      const sectionList = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+      parseSearchSections(sectionList);
+    } catch (err) {
+      // InnerTube error, fallback will take over
+    }
+  }
+
+  // 2. Secondary Engine: HTML Search with Cookie Consent bypass
+  async function executeHtmlSearch(url) {
     try {
       const res = await safeFetch(url, {
         headers: {
+          'Cookie': 'SOCS=CAESEwgDEgk2OTg0NzgxMDUaAmVuIAEaBgiA_LyaBg; CONSENT=YES+cb; PREF=hl=en&gl=US;',
           'Accept-Language': 'en-US,en;q=0.9'
         }
       });
@@ -302,80 +390,37 @@ async function searchYouTubeChannels(query, limit = 50) {
       }
       const html = await res.text();
       const match = html.match(/var ytInitialData = ({.*?});<\/script>/s) || html.match(/ytInitialData\s*=\s*({.+?});/s);
-      if (!match) {
-        if (html.includes('consent.youtube.com') || html.includes('captcha')) {
-          console.warn(`[Zenith] ⚠️ YouTube challenge or consent encountered. Waiting 10s...`);
-          await sleep(10000);
-        }
-        return;
-      }
+      if (!match) return;
 
       const data = JSON.parse(match[1]);
       const sectionList = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-
-      for (const section of sectionList) {
-        const items = section.itemSectionRenderer?.contents || [];
-        for (const item of items) {
-          // Channel search result
-          if (item.channelRenderer) {
-            const c = item.channelRenderer;
-            const channelId = c.channelId;
-            const handle = c.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl || '';
-            const title = c.title?.simpleText || '';
-            const desc = c.descriptionSnippet?.runs?.map(r => r.text).join('') || '';
-            const subs = c.videoCountText?.simpleText || c.subscriberCountText?.simpleText || '';
-
-            if (channelId && !channels.has(channelId)) {
-              channels.set(channelId, {
-                channelId,
-                handle,
-                title,
-                subscribers: subs,
-                bioSnippet: desc
-              });
-            }
-          }
-
-          // Video search result (extract the creator's channel)
-          if (item.videoRenderer) {
-            const v = item.videoRenderer;
-            const owner = v.ownerText?.runs?.[0];
-            const channelEndpoint = owner?.navigationEndpoint?.browseEndpoint;
-            const channelId = channelEndpoint?.browseId;
-            const handle = channelEndpoint?.canonicalBaseUrl || '';
-            const title = owner?.text || '';
-
-            if (channelId && !channels.has(channelId)) {
-              channels.set(channelId, {
-                channelId,
-                handle,
-                title,
-                subscribers: '',
-                bioSnippet: ''
-              });
-            }
-          }
-        }
-      }
+      parseSearchSections(sectionList);
     } catch (err) {
-      console.warn(`[Zenith] Search error for "${query}":`, err.message);
+      console.warn(`[Zenith] HTML Search error for "${query}":`, err.message);
     }
   }
 
-  // 1. Search channels directly (sp=EgIQAg%253D%253D filters channels strictly)
-  const channelSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D&gl=US&hl=en`;
-  await executeSearch(channelSearchUrl);
+  // Step 1: Channels search via InnerTube API (EgIQAg%3D%3D = channels filter)
+  await executeInnerTubeSearch("EgIQAg%3D%3D");
 
-  // 2. If more channels needed, search videos uploaded this month (sp=CAISAhAB) - guarantees recent uploaders!
+  // Step 2: Recent videos uploaded this month (CAISAhAB) if needed
   if (channels.size < limit) {
-    const recentVideosUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=CAISAhAB&gl=US&hl=en`;
-    await executeSearch(recentVideosUrl);
+    await executeInnerTubeSearch("CAISAhAB");
   }
 
-  // 3. If still more channels needed, extract active creators from top niche video search
+  // Step 3: General keyword search if needed
   if (channels.size < limit) {
-    const videoSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&gl=US&hl=en`;
-    await executeSearch(videoSearchUrl);
+    await executeInnerTubeSearch();
+  }
+
+  // Step 4: Fallback to HTML Search if InnerTube yielded nothing
+  if (channels.size === 0) {
+    const channelSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAg%253D%253D&gl=US&hl=en`;
+    await executeHtmlSearch(channelSearchUrl);
+    if (channels.size < limit) {
+      const recentVideosUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=CAISAhAB&gl=US&hl=en`;
+      await executeHtmlSearch(recentVideosUrl);
+    }
   }
 
   return Array.from(channels.values()).slice(0, limit);
@@ -428,6 +473,7 @@ async function fetchChannelDeepDetails(channel, options = {}) {
     await sleep(requestDelayMs);
     const res = await safeFetch(channelUrl, {
       headers: {
+        'Cookie': 'SOCS=CAESEwgDEgk2OTg0NzgxMDUaAmVuIAEaBgiA_LyaBg; CONSENT=YES+cb; PREF=hl=en&gl=US;',
         'Accept-Language': 'en-US,en;q=0.9'
       }
     });
@@ -591,6 +637,7 @@ async function fetchChannelDeepDetails(channel, options = {}) {
       const videosUrl = `${getChannelUrl(targetHandle)}/videos`;
       const vRes = await safeFetch(videosUrl, {
         headers: {
+          'Cookie': 'SOCS=CAESEwgDEgk2OTg0NzgxMDUaAmVuIAEaBgiA_LyaBg; CONSENT=YES+cb; PREF=hl=en&gl=US;',
           'Accept-Language': 'en-US,en;q=0.9'
         }
       });
@@ -600,22 +647,21 @@ async function fetchChannelDeepDetails(channel, options = {}) {
         const vMatch = vHtml.match(/var ytInitialData = ({.*?});<\/script>/s) || vHtml.match(/ytInitialData\s*=\s*({.+?});/s);
         if (vMatch) {
           const vData = JSON.parse(vMatch[1]);
-          const tabContents = vData.contents?.twoColumnBrowseResultsRenderer?.tabs?.find(t => t.tabRenderer?.selected)?.tabRenderer?.content?.richGridRenderer?.contents || [];
+          const tabContents = vData.contents?.twoColumnBrowseResultsRenderer?.tabs?.find(t => t.tabRenderer?.title === 'Videos' || t.tabRenderer?.selected)?.tabRenderer?.content?.richGridRenderer?.contents || [];
           
           const recentVideoIds = [];
           const videoTitles = [];
 
-          // Extract latest upload recency from first video
-          if (tabContents.length > 0) {
-            const firstItem = tabContents[0];
-            const firstVm = firstItem?.richItemRenderer?.content?.lockupViewModel;
+          // Scan first 5 items to detect upload recency (handles premiere, live stream, or regular video)
+          for (const item of tabContents.slice(0, 5)) {
+            const vm = item?.richItemRenderer?.content?.lockupViewModel;
             let dateText = '';
-            if (firstVm) {
-              const rows = firstVm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
+            if (vm) {
+              const rows = vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
               for (const r of rows) {
                 for (const p of r.metadataParts || []) {
                   const txt = p.text?.content || '';
-                  if (txt.includes('ago') || txt.includes('Streamed') || txt.includes('Premiered')) {
+                  if (txt.includes('ago') || txt.includes('Stream') || txt.includes('Premier') || txt.includes('Live')) {
                     dateText = txt;
                     break;
                   }
@@ -623,13 +669,14 @@ async function fetchChannelDeepDetails(channel, options = {}) {
                 if (dateText) break;
               }
             } else {
-              const vr = firstItem?.richItemRenderer?.content?.videoRenderer;
+              const vr = item?.richItemRenderer?.content?.videoRenderer;
               dateText = vr?.publishedTimeText?.simpleText || '';
             }
 
-            if (dateText) {
+            if (dateText && !lead.lastUploadText) {
               lead.lastUploadText = dateText;
               lead.lastUploadDays = parseDaysAgo(dateText);
+              break;
             }
           }
 
@@ -1103,6 +1150,18 @@ async function runWorker(config) {
       for (const top of topics) {
         newBatch.push(`${top} business coach`);
         newBatch.push(`business coaching ${top}`);
+      }
+      // 4. Industry + Topic + Coach
+      for (const ind of subIndustries) {
+        for (const top of topics.slice(0, 5)) {
+          newBatch.push(`${ind} ${top} coach`);
+        }
+      }
+      // 5. Industry + City
+      for (const city of cities) {
+        for (const ind of subIndustries.slice(0, 6)) {
+          newBatch.push(`${ind} coach ${city}`);
+        }
       }
 
       // Distribute modulo across workers
