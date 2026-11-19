@@ -981,7 +981,7 @@ function exportResults(leads, outputBasePath) {
  * Exhaustive Query Expansion Engine
  * Generates hundreds/thousands of laser-focused permutations for any niche
  */
-function generateExpandedQueryMatrix(baseNiches = ['business coach'], targetCountries = []) {
+function generateExpandedQueryMatrix(baseNiches = ['coach'], targetCountries = []) {
   const defaultGeos = [
     'USA', 'US', 'United States', 'New York', 'California', 'Texas', 'Florida', 'Austin',
     'Miami', 'Chicago', 'Los Angeles', 'Atlanta', 'Dallas', 'Seattle', 'Denver', 'Boston',
@@ -995,20 +995,38 @@ function generateExpandedQueryMatrix(baseNiches = ['business coach'], targetCoun
     : defaultGeos;
 
   const coachingRoles = [
-    'business coach', 'business coaching', 'executive coach', 'business consultant',
-    'business mentor', 'growth consultant', 'sales coach', 'scaling coach',
-    'agency coach', 'smb business coach', 'b2b coach', 'online business coach',
-    'high ticket business coach'
+    // General Coaching
+    'coach', 'coaching', 'mentor', 'mentorship', 'consultant',
+    // Life & Mindset
+    'life coach', 'life coaching', 'mindset coach', 'transformation coach',
+    'mental performance coach', 'success coach', 'personal development coach',
+    'spiritual coach', 'empowerment coach', 'confidence coach',
+    // Fitness, Health & Wellness
+    'fitness coach', 'online fitness coach', 'health coach', 'nutrition coach',
+    'wellness coach', 'weight loss coach', 'strength coach', 'bodybuilding coach',
+    // Career, Leadership & Executive
+    'career coach', 'executive coach', 'leadership coach', 'interview coach',
+    'management coach', 'public speaking coach', 'communication coach',
+    // Relationship & Dating
+    'relationship coach', 'dating coach', 'marriage coach', 'couples coach',
+    // Finance & Wealth
+    'financial coach', 'money coach', 'wealth coach', 'real estate coach',
+    'crypto coach', 'trading coach',
+    // Business, Sales & Marketing
+    'business coach', 'business coaching', 'business consultant', 'sales coach',
+    'marketing coach', 'scaling coach', 'agency coach', 'ecommerce coach',
+    'high ticket coach', 'b2b coach', 'growth consultant',
+    // Skill & Content
+    'content coach', 'youtube coach', 'vocal coach', 'voice coach'
   ];
 
   const topics = [
-    'client acquisition', 'scaling to 7 figures', 'scaling to 6 figures',
-    'high ticket sales', 'b2b lead generation', 'funnels & systems',
-    'operations & hiring', 'lead generation', 'mastermind', 'podcast',
-    'agency scaling', 'consulting business model', 'closing high ticket',
-    'entrepreneur growth', 'interview', 'case study', 'for entrepreneurs',
-    'for founders', 'for CEOs', 'for agency owners', 'small business growth',
-    'sales training', 'framework & roadmap', 'cold email outreach'
+    'coaching client', 'coaching program', 'transformation', 'mindset',
+    'habit building', 'mastermind', 'podcast', 'interview', 'q&a',
+    'tips & strategies', 'framework & roadmap', 'case study', 'advice',
+    'client acquisition', 'scaling to 6 figures', 'scaling to 7 figures',
+    'high ticket sales', 'lead generation', 'systems & routines',
+    'for beginners', 'for entrepreneurs', 'for creators', 'for professionals'
   ];
 
   const queries = new Set();
@@ -1017,7 +1035,7 @@ function generateExpandedQueryMatrix(baseNiches = ['business coach'], targetCoun
     const cleanNiche = rawNiche.trim();
     if (!cleanNiche) continue;
 
-    const isCoaching = cleanNiche.toLowerCase().includes('coach') || cleanNiche.toLowerCase().includes('business');
+    const isCoaching = cleanNiche.toLowerCase().includes('coach') || cleanNiche.toLowerCase().includes('consult') || cleanNiche.toLowerCase().includes('mentor');
     const rolesToUse = isCoaching ? coachingRoles : [cleanNiche];
 
     for (const role of rolesToUse) {
@@ -1055,7 +1073,7 @@ async function runWorker(config) {
   const {
     workerId = 1,
     totalWorkers = 1,
-    niches = ['business coach'],
+    niches = ['coach'],
     maxChannelsPerWorker = 30,
     filters = {
       requireEmail: false,
@@ -1118,10 +1136,12 @@ async function runWorker(config) {
       console.log(`\n🔄 [Worker ${workerId}] Generating Round ${round} fresh queries to reach target (${processedLeads.length}/${maxChannelsPerWorker} leads)...`);
       
       const subIndustries = [
-        'real estate', 'fitness', 'saas', 'ecommerce', 'home service',
-        'trade & construction', 'roofing', 'cleaning', 'accounting',
-        'marketing agency', 'consulting', 'dental', 'clinic', 'law firm',
-        'smb', 'b2b', 'startup', 'financial', 'executive', 'sales'
+        'life', 'mindset', 'fitness', 'health', 'nutrition', 'wellness',
+        'weight loss', 'strength', 'career', 'executive', 'leadership',
+        'relationship', 'dating', 'marriage', 'financial', 'money',
+        'wealth', 'sales', 'business', 'real estate', 'marketing',
+        'agency', 'ecommerce', 'high ticket', 'transformation', 'success',
+        'public speaking', 'performance', 'spiritual', 'consulting'
       ];
       const cities = [
         'New York', 'London', 'Sydney', 'Austin', 'Miami', 'Chicago',
@@ -1130,37 +1150,32 @@ async function runWorker(config) {
         'Houston', 'San Francisco', 'Birmingham', 'Leeds'
       ];
       const topics = [
-        'scaling', 'client acquisition', 'lead generation', 'sales',
-        'high ticket', 'operations', 'systems', 'roadmap', 'interview', 'podcast'
+        'mindset', 'transformation', 'habits', 'client acquisition', 'sales',
+        'high ticket', 'operations', 'systems', 'roadmap', 'interview', 'podcast', 'tips'
       ];
 
       const newBatch = [];
-      // 1. Industry + Role (e.g. "roofing business coach", "real estate coach")
+      // 1. Industry + Role (e.g. "life coach", "fitness coach", "mindset coach", "career coach")
       for (const ind of subIndustries) {
-        newBatch.push(`${ind} business coach`);
         newBatch.push(`${ind} coach`);
+        newBatch.push(`${ind} coaching`);
+        newBatch.push(`${ind} mentor`);
       }
-      // 2. Role + City (e.g. "business coach Austin", "business coach London")
+      // 2. Role + City (e.g. "life coach London", "fitness coach Austin", "career coach Sydney")
       for (const city of cities) {
-        newBatch.push(`business coach ${city}`);
-        newBatch.push(`business mentor ${city}`);
-        newBatch.push(`executive coach ${city}`);
-      }
-      // 3. Topic + Role (e.g. "client acquisition coach", "sales business coach")
-      for (const top of topics) {
-        newBatch.push(`${top} business coach`);
-        newBatch.push(`business coaching ${top}`);
-      }
-      // 4. Industry + Topic + Coach
-      for (const ind of subIndustries) {
-        for (const top of topics.slice(0, 5)) {
-          newBatch.push(`${ind} ${top} coach`);
+        for (const ind of ['life', 'fitness', 'mindset', 'career', 'business', 'health', 'executive']) {
+          newBatch.push(`${ind} coach ${city}`);
         }
       }
-      // 5. Industry + City
-      for (const city of cities) {
-        for (const ind of subIndustries.slice(0, 6)) {
-          newBatch.push(`${ind} coach ${city}`);
+      // 3. Topic + Role
+      for (const top of topics) {
+        newBatch.push(`${top} coach`);
+        newBatch.push(`coaching ${top}`);
+      }
+      // 4. Industry + Topic + Coach
+      for (const ind of subIndustries.slice(0, 15)) {
+        for (const top of topics.slice(0, 4)) {
+          newBatch.push(`${ind} ${top} coach`);
         }
       }
 
@@ -1172,7 +1187,8 @@ async function runWorker(config) {
         // Fallback: alphabet expansion
         const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
         for (const char of alphabet) {
-          queryQueue.push(`business coach ${char}`);
+          queryQueue.push(`coach ${char}`);
+          queryQueue.push(`coaching ${char}`);
         }
       }
     }
@@ -1300,5 +1316,6 @@ module.exports = {
   extractLinks,
   scrapeDomainForEmails,
   exportResults,
-  passesFilters
+  passesFilters,
+  generateExpandedQueryMatrix
 };

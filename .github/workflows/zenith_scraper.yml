@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       niches:
-        description: 'Target Niches / ICP Queries (comma-separated)'
+        description: 'Target Niches / ICP Queries (comma-separated, e.g. coach, life coach, fitness coach, business coach)'
         required: true
-        default: 'business coach'
+        default: 'coach'
         type: string
       workers:
         description: 'Number of Parallel GitHub Action Workers (Each runs on a unique IP)'
